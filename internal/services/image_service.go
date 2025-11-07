@@ -10,6 +10,7 @@ import (
 	"github.com/rafly-ananda/snappsy-uploader-api/internal/models"
 	"github.com/rafly-ananda/snappsy-uploader-api/internal/repositories"
 	"github.com/rafly-ananda/snappsy-uploader-api/internal/storage"
+	"github.com/rafly-ananda/snappsy-uploader-api/internal/websocket"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -18,14 +19,22 @@ type ImageService struct {
 	obj          storage.ObjectStorage
 	bucket       string
 	presignedTtl time.Duration
+	websocketHub *websocket.Hub
 }
 
-func NewImageService(repo repositories.ImageRepository, obj storage.ObjectStorage, bucket string, presignedTtl time.Duration) *ImageService {
+func NewImageService(
+	repo repositories.ImageRepository,
+	obj storage.ObjectStorage,
+	bucket string,
+	presignedTtl time.Duration,
+	websocketHub *websocket.Hub,
+	) *ImageService {
 	return &ImageService{
 		repo:         repo,
 		obj:          obj,
 		bucket:       bucket,
 		presignedTtl: presignedTtl,
+		websocketHub: websocketHub, 
 	}
 }
 
@@ -45,6 +54,9 @@ func (s *ImageService) CommitImageUpload(ctx context.Context, req imgDto.CommitU
 		return imgDto.CommitUploadRes{}, err
 	}
 
+	
+	s.websocketHub.Broadcast("New Image Added to Event " + id)
+
 	return imgDto.CommitUploadRes{ID: id}, nil
 }
 
@@ -62,6 +74,8 @@ func (s *ImageService) GeneratePresignedUploader(ctx context.Context, req imgDto
 	// Get presigned upload URL from storage (via the interface)
 	url, err := s.obj.PresignPut(ctx, s.bucket, key, s.presignedTtl)
 	if err != nil {
+		fmt.Println("Error here")
+		fmt.Println(err)
 		return imgDto.GeneratePresignedUrlRes{}, err
 	}
 
@@ -98,9 +112,11 @@ func (s *ImageService) GetAllPresignedImagesByEvent(ctx context.Context, eventId
 		}
 
 		presignedList = append(presignedList, imgDto.GeneratePresignedUrlView{
+			Id:       item.ID.Hex(),
 			Url:      url,
 			Captions: item.Captions,
 			From:     item.Username,
+			CreatedAt:  item.CreatedAt.String(),
 		})
 	}
 

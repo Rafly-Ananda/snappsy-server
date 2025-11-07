@@ -17,6 +17,7 @@ import (
 	"github.com/rafly-ananda/snappsy-uploader-api/internal/repositories/impls"
 	"github.com/rafly-ananda/snappsy-uploader-api/internal/services"
 	"github.com/rafly-ananda/snappsy-uploader-api/internal/storage"
+	"github.com/rafly-ananda/snappsy-uploader-api/internal/websocket"
 )
 
 func main() {
@@ -33,12 +34,17 @@ func main() {
 		log.Fatalf("failed to init mongo: %v", err)
 	}
 
+	// Websocket Initialization
+	hub := websocket.NewHub()
+	go hub.Run()
+	websocketHandler := websocket.NewWebSocketHandler(hub)
+
 	// Repository Initialization
 	imageRepo := impls.NewMongoImageRepository(mongoStore.Db.Collection(cfg.MongoCfg.ImageCollection))
 	eventRepo := impls.NewMongoEventRepository(mongoStore.Db.Collection(cfg.MongoCfg.EventCollection))
 
 	// Service Initialization
-	imageSvc := services.NewImageService(imageRepo, minioStore, cfg.MinioCfg.MinIOBucket, cfg.MinioCfg.MinioPresignedExpiry)
+	imageSvc := services.NewImageService(imageRepo, minioStore, cfg.MinioCfg.MinIOBucket, cfg.MinioCfg.MinioPresignedExpiry, hub)
 	eventSvc := services.NewEventService(eventRepo)
 
 	// Handler Initialization
@@ -48,10 +54,11 @@ func main() {
 	r := ginHttp.NewRouter(ginHttp.Handlers{
 		Images: imageHandler,
 		Events: eventHandler,
+		Websocket: websocketHandler,
 	})
 
 	srv := &http.Server{
-		Addr:    ":8080",
+		Addr:    ":5000",
 		Handler: r,
 	}
 

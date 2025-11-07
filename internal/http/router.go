@@ -3,21 +3,32 @@ package http
 import (
 	"net/http"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
 	"github.com/rafly-ananda/snappsy-uploader-api/internal/http/handlers/events"
 	"github.com/rafly-ananda/snappsy-uploader-api/internal/http/handlers/images"
+	"github.com/rafly-ananda/snappsy-uploader-api/internal/websocket"
 )
 
 type Handlers struct {
 	Images *images.ImageHandler
 	Events *events.EventHandler
+	Websocket *websocket.WebSocketHandler
 }
 
 func NewRouter(h Handlers) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
+	r.Use(cors.Default())
 
+	// Websocket Setup
+	hub := websocket.NewHub()
+	go hub.Run()
+
+	r.GET("/ws", h.Websocket.Handle)
+
+	// HTTP Setup
 	v1 := r.Group("/api/v1")
 	{
 		// Images
