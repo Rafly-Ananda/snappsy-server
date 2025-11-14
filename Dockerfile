@@ -21,9 +21,15 @@ ENV CGO_ENABLED=0 GOFLAGS="-buildvcs=false"
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 
+# Set Build Version
+ARG VERSION=dev
+ARG BUILD_TIME
+
 RUN --mount=type=cache,target=/root/.cache/go-build \
     GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -ldflags="-s -w" -o /out/app ./cmd/server
+    go build \
+    -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
+    -o /out/app ./cmd/server
 
 ########################
 # 2) Runtime stage
@@ -52,11 +58,11 @@ ENV PORT=8080
 ENV MINIO_ENDPOINT="http://minio:9000" \
     MINIO_ACCESS_KEY="" \
     MINIO_SECRET_KEY="" \
-    MINIO_BUCKET="uploads" \
+    MINIO_BUCKET="images" \
     MINIO_USE_SSL="false"
 
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD wget -qO- http://127.0.0.1:${PORT}/health-check || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD curl -f http://localhost:${PORT}/health-check || exit 1
 
 ENTRYPOINT ["/usr/local/bin/app"]

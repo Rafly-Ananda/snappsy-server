@@ -1,0 +1,142 @@
+services:
+  goapp:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        GO_VERSION: 1.24
+    container_name: goapp-dev
+    restart: unless-stopped
+    depends_on:
+      - minio
+      - mongo
+    env_file:
+      - .env
+    environment:
+      - PORT=8080
+      - GIN_MODE=debug
+      - ENV=development
+    ports:
+      - "8080:8080"  # Exposed for direct access in dev
+    volumes:
+      - .:/app  # Mount source code for hot reload
+      - /app/tmp  # Exclude tmp directory
+    working_dir: /app
+    # Use air for hot reload
+    command: air -c .air.toml
+    networks:
+      - app-network
+
+  mongo:
+    image: mongo:6.0
+    container_name: mongo-dev
+    restart: unless-stopped
+    ports:
+      - "27017:27017"  # Exposed for MongoDB Compass, Studio 3T, etc.
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
+    volumes:
+      - mongo_data_dev:/data/db
+    networks:
+      - app-network
+
+  mongo-express:
+    image: mongo-express:latest
+    container_name: mongo-express
+    restart: unless-stopped
+    ports:
+      - "8081:8081"  # Web UI for MongoDB
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGODB_USERNAME}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGODB_PASSWORD}
+      ME_CONFIG_MONGODB_URL: mongodb://${MONGODB_USERNAME}:${MONGODB_PASSWORD}@mongo:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: admin
+    depends_on:
+      - mongo
+    networks:
+      - app-network
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio-dev
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"  # S3 API - exposed for testing
+      - "9001:9001"  # Web console - exposed for management
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    volumes:
+      - minio_data_dev:/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  minio-mc:
+    image: minio/mc:latest
+    container_name: minio-mc-dev
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    env_file:
+      - .env
+    networks:
+      - app-network
+    entrypoint: >
+      /bin/sh -c "
+      echo 'Waiting for MinIO to be ready...' &&
+      until (/usr/bin/mc alias set local http://minio:9000 ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY}) do
+        echo 'MinIO not ready yet, retrying in 5s...' &&
+        sleep 5
+      done &&
+      echo 'MinIO is ready, creating bucket...' &&
+      /usr/bin/mc mb -p local/${MINIO_BUCKET} || true &&
+      /usr/bin/mc anonymous set public local/${MINIO_BUCKET} || true &&
+      echo 'Bucket created and set to public!' &&
+      exit 0
+      "
+
+  # Optional: Redis for caching/sessions in development
+  redis:
+    image: redis:7-alpine
+    container_name: redis-dev
+    restart: unless-stopped
+    ports:
+      - "6378:6379"
+    volumes:
+      - redis_data_dev:/data
+    networks:
+      - app-network
+    command: redis-server --appendonly yes
+
+  # Optional: Mailhog for email testing
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web UI
+    networks:
+      - app-network
+
+volumes:
+  minio_data_dev:
+    driver: local
+  mongo_data_dev:
+    driver: local
+  redis_data_dev:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge

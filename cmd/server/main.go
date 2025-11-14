@@ -20,6 +20,11 @@ import (
 	"github.com/rafly-ananda/snappsy-uploader-api/internal/websocket"
 )
 
+var (
+	Version   = "dev"
+	BuildTime = "unknown"
+)
+
 func main() {
 	// Projector calls GET /sessions/:id/images?limit=200 repeatedly or (better) you push via WebSocket using Redis Streams as discussed earlier.
 	cfg := config.Load()
@@ -52,19 +57,19 @@ func main() {
 	eventHandler := events.NewEventHandler(eventSvc)
 
 	r := ginHttp.NewRouter(ginHttp.Handlers{
-		Images: imageHandler,
-		Events: eventHandler,
+		Images:    imageHandler,
+		Events:    eventHandler,
 		Websocket: websocketHandler,
 	})
 
 	srv := &http.Server{
-		Addr:    ":5000",
+		Addr:    ":" + cfg.GeneralCfg.GinPort,
 		Handler: r,
 	}
 
 	// Start server
 	go func() {
-		log.Printf("starting server on :%s", cfg.GeneralCfg.GinPort)
+		log.Printf("Starting server version %s (built %s) on:%s", Version, BuildTime, cfg.GeneralCfg.GinPort)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server error: %v", err)
 		}
