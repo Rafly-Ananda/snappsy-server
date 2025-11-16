@@ -17,8 +17,8 @@ services:
     environment:
       - PORT=8080
       - GIN_MODE=release
-    ports:
-      - "127.0.0.1:8080:8080"  # Only accessible from localhost (Nginx will proxy)
+    expose:
+      - "8080"
     networks:
       - app-network
     healthcheck:
@@ -32,8 +32,8 @@ services:
     image: mongo:6.0
     container_name: mongo
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:27017:27017"  # Only accessible from localhost
+    ports: 
+      - "127.0.0.1:27017:27017" # enable SSH tunnel access
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USERNAME}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD}
@@ -54,12 +54,13 @@ services:
     container_name: minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
-    ports:
-      - "127.0.0.1:9000:9000"  # S3 API - localhost only
-      - "127.0.0.1:9001:9001"  # Web console - localhost only
+    expose:
+      - "9000"
+      - "9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+      MINIO_BROWSER_REDIRECT_URL: https://console.raflysoemantri.cloud 
     volumes:
       - minio_data:/data
     networks:
@@ -107,6 +108,7 @@ services:
       - ./certbot/www:/var/www/certbot:ro
     depends_on:
       - goapp
+      - minio
     networks:
       - app-network
     healthcheck:
@@ -127,9 +129,7 @@ services:
 
 volumes:
   minio_data:
-    driver: local
   mongo_data:
-    driver: local
 
 networks:
   app-network:
