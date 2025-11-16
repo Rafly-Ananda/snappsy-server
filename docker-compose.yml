@@ -61,6 +61,8 @@ services:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
       MINIO_BROWSER_REDIRECT_URL: https://console.raflysoemantri.cloud 
+      MINIO_SERVER_URL: https://files.raflysoemantri.cloud
+      MINIO_DOMAIN: files.raflysoemantri.cloud 
     volumes:
       - minio_data:/data
     networks:

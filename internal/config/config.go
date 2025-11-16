@@ -37,10 +37,6 @@ type Config struct {
 }
 
 func Load() *Config {
-	// TODO : only use this for local development
-	// Uncomment the following lines if you want to load environment variables from a .env file
-	// during local development. Make sure to import the "github.com/joho/godotenv" package.
-	
 	// err := godotenv.Load()
 	// if err != nil {
 	// 	log.Fatal("Error loading .env file")
