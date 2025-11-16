@@ -18,7 +18,7 @@ help:
 # Development commands
 dev:
 	@echo "Starting development environment..."
-	cp .env.development .env
+	cp .env.example .env
 	docker-compose -f docker-compose.dev.yml up -d
 	@echo ""
 	@echo "✓ Development environment started!"
@@ -34,7 +34,7 @@ dev:
 
 dev-build:
 	@echo "Rebuilding development environment..."
-	cp .env.development .env
+	cp .env.example .env
 	docker-compose -f docker-compose.dev.yml up -d --build
 
 dev-down:

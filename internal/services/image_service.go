@@ -62,14 +62,12 @@ func (s *ImageService) CommitImageUpload(ctx context.Context, req imgDto.CommitU
 
 func (s *ImageService) GeneratePresignedUploader(ctx context.Context, req imgDto.GeneratePresignedUrlReq) (imgDto.GeneratePresignedUrlRes, error) {
 	// Check MimeType
-	mime, err := helper.FromDataURL(req.PhotoURL)
-	if err != nil {
-		return imgDto.GeneratePresignedUrlRes{}, err
-	}
+	mime := helper.ExtractMimeType(req.MimeType)
 
 	// Generate unique object key (combine username, session)
-	// TODO: need to remove or change time Format()
-	key := fmt.Sprintf("%s-%s-%s%s", req.Username, req.EventId, time.Now().Format("20060102150405"), mime.Ext)
+	timeStamp := time.Now().Format("20060102150405")
+
+	key := fmt.Sprintf("%s-%s-%s%s", req.Username, req.EventId, timeStamp, mime)
 
 	// Get presigned upload URL from storage (via the interface)
 	url, err := s.obj.PresignPut(ctx, s.bucket, key, s.presignedTtl)
@@ -82,7 +80,7 @@ func (s *ImageService) GeneratePresignedUploader(ctx context.Context, req imgDto
 	return imgDto.GeneratePresignedUrlRes{
 		UploadUrl:   url,
 		ObjectKey:   key,
-		ContentType: mime.MIME,
+		ContentType: req.MimeType,
 	}, nil
 }
 
