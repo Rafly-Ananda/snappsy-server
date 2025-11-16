@@ -19,7 +19,7 @@ help:
 dev:
 	@echo "Starting development environment..."
 	cp .env.example .env
-	docker-compose -f docker-compose.dev.yml up -d
+	docker compose -f docker compose.dev.yml up -d
 	@echo ""
 	@echo "✓ Development environment started!"
 	@echo ""
@@ -35,18 +35,18 @@ dev:
 dev-build:
 	@echo "Rebuilding development environment..."
 	cp .env.example .env
-	docker-compose -f docker-compose.dev.yml up -d --build
+	docker compose -f docker compose.dev.yml up -d --build
 
 dev-down:
 	@echo "Stopping development environment..."
-	docker-compose -f docker-compose.dev.yml down
+	docker compose -f docker compose.dev.yml down
 
 dev-logs:
-	docker-compose -f docker-compose.dev.yml logs -f
+	docker compose -f docker compose.dev.yml logs -f
 
 dev-restart:
 	@echo "Restarting development services..."
-	docker-compose -f docker-compose.dev.yml restart goapp
+	docker compose -f docker compose.dev.yml restart goapp
 
 # Production commands
 prod:
@@ -57,7 +57,7 @@ prod:
 		exit 1; \
 	fi
 	export BUILD_TIME=$$(date -u +"%Y-%m-%dT%H:%M:%SZ") && \
-	docker-compose up -d
+	docker compose up -d
 	@echo ""
 	@echo "✓ Production environment started!"
 	@echo ""
@@ -70,14 +70,14 @@ prod-build:
 		exit 1; \
 	fi
 	export BUILD_TIME=$$(date -u +"%Y-%m-%dT%H:%M:%SZ") && \
-	docker-compose up -d --build
+	docker compose up -d --build
 
 prod-down:
 	@echo "Stopping production environment..."
-	docker-compose down
+	docker compose down
 
 prod-logs:
-	docker-compose logs -f
+	docker compose logs -f
 
 # Testing
 test:
@@ -92,18 +92,18 @@ test-coverage:
 
 # Database commands
 db-shell:
-	docker-compose -f docker-compose.dev.yml exec mongo mongosh -u admin -p devpassword123
+	docker compose -f docker compose.dev.yml exec mongo mongosh -u admin -p devpassword123
 
 db-backup:
 	@echo "Creating database backup..."
-	docker-compose exec mongo mongodump --uri="mongodb://admin:devpassword123@localhost:27017" --out=/data/backup
+	docker compose exec mongo mongodump --uri="mongodb://admin:devpassword123@localhost:27017" --out=/data/backup
 	@echo "Backup created in mongo container at /data/backup"
 
 # Cleanup
 clean:
 	@echo "Cleaning up..."
-	docker-compose -f docker-compose.dev.yml down -v
-	docker-compose down -v
+	docker compose -f docker compose.dev.yml down -v
+	docker compose down -v
 	docker system prune -f
 	@echo "✓ Cleanup complete!"
 
@@ -112,8 +112,8 @@ clean-all:
 	@read -p "Are you sure? [y/N] " -n 1 -r; \
 	echo; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-		docker-compose -f docker-compose.dev.yml down -v --remove-orphans; \
-		docker-compose down -v --remove-orphans; \
+		docker compose -f docker compose.dev.yml down -v --remove-orphans; \
+		docker compose down -v --remove-orphans; \
 		docker system prune -a -f --volumes; \
 		echo "✓ All cleaned up!"; \
 	fi

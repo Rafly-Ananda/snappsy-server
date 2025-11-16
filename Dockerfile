@@ -50,17 +50,6 @@ COPY --from=builder /out/app /usr/local/bin/app
 # Drop privileges
 USER app
 
-# --- App configuration (override at runtime) ---
-# Gin usually listens on 8080;
-ENV PORT=8080
-
-# MinIO settings (override via docker run -e ...)
-ENV MINIO_ENDPOINT="http://minio:9000" \
-    MINIO_ACCESS_KEY="" \
-    MINIO_SECRET_KEY="" \
-    MINIO_BUCKET="images" \
-    MINIO_USE_SSL="false"
-
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD curl -f http://localhost:${PORT}/health-check || exit 1

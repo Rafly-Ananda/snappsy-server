@@ -2,6 +2,8 @@ package storage
 
 import (
 	"context"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -29,10 +31,25 @@ func NewMinio(endpoint, accessKey, secretKey, bucket string, minioExpiry time.Du
 }
 
 func (m *MinioAdapter) PresignPut(ctx context.Context, bucket string, key string, expiry time.Duration) (string, error) {
+	appEnv := os.Getenv("APP_ENV") // production, development, testing
 	u, err := m.Client.PresignedPutObject(ctx, bucket, key, expiry)
 	if err != nil {
 		return "", err
 	}
+
+	publicURL := os.Getenv("MINIO_PUBLIC_URL") // https://files.rafly.com
+    internalEndpoint := os.Getenv("MINIO_ENDPOINT") // http://minio:9000
+
+	urlStr := u.String()
+	// Replace http://minio:9000 with https://files.raflysoemantri.cloud
+	urlStr = strings.Replace(urlStr, "http://"+internalEndpoint, publicURL, 1)
+	// Also handle https case
+	urlStr = strings.Replace(urlStr, "https://"+internalEndpoint, publicURL, 1)
+
+	if (appEnv == "production") {
+		return urlStr, nil
+	}
+
 	return u.String(), nil
 }
 
@@ -41,6 +58,13 @@ func (m *MinioAdapter) PresignGet(ctx context.Context, bucket string, key string
 	if err != nil {
 		return "", err
 	}
+
+    publicURL := os.Getenv("MINIO_PUBLIC_URL") // https://files.rafly.com
+    internalEndpoint := os.Getenv("MINIO_ENDPOINT") // http://minio:9000
+
+	urlStr := u.String()
+    urlStr = strings.Replace(urlStr, internalEndpoint, publicURL, 1)
+
 	return u.String(), nil
 }
 

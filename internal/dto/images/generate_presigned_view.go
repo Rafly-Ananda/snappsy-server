@@ -5,5 +5,6 @@ type GeneratePresignedUrlView struct {
 	Url      string `json:"url"`
 	Captions string `json:"captions"`
 	From     string `json:"from"`
+	Orientation string `json:"orientation"`
 	CreatedAt string  `json:"createdAt"`
 }

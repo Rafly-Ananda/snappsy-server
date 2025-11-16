@@ -5,8 +5,6 @@ import (
 	"os"
 	"strconv"
 	"time"
-
-	"github.com/joho/godotenv"
 )
 
 type GeneralConfig struct {
@@ -39,10 +37,14 @@ type Config struct {
 }
 
 func Load() *Config {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
+	// TODO : only use this for local development
+	// Uncomment the following lines if you want to load environment variables from a .env file
+	// during local development. Make sure to import the "github.com/joho/godotenv" package.
+	
+	// err := godotenv.Load()
+	// if err != nil {
+	// 	log.Fatal("Error loading .env file")
+	// }
 
 	cfg := &Config{
 		MinioCfg:   GetMinio(),
@@ -57,7 +59,7 @@ func GetMongo() MongoConfig {
 		Hosts:           getEnv("MONGODB_HOST", "localhost:2173"),
 		DbName:          getEnv("MONGO_INITDB_DATABASE", "snappsy"),
 		DbUsername:      getEnv("MONGODB_USERNAME", "mongoadmin"),
-		DbPassword:      getEnv("MONGODB_USERNAME", "mongoadmin"),
+		DbPassword:      getEnv("MONGODB_PASSWORD", "mongoadmin"),
 		DbOpts:          getEnv("MONGO_OPTIONS", ""),
 		ImageCollection: getEnv("MONGO_IMAGES_COLLECTION", "images"),
 		EventCollection: getEnv("MONGO_EVENTS_COLLECTION", "events"),

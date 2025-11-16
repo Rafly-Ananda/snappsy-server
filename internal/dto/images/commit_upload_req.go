@@ -5,6 +5,7 @@ type CommitUploadReq struct {
 	Username string `json:"username" binding:"required"`
 	MinioKey string `json:"minioKey" binding:"required"`
 	Captions string `json:"captions" binding:"required"`
+	Orientation string  `json:"orientation" binding:"required"`
 }
 
 type CommitUploadRes struct {

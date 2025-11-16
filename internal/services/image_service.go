@@ -45,6 +45,7 @@ func (s *ImageService) CommitImageUpload(ctx context.Context, req imgDto.CommitU
 		Username:  req.Username,
 		MinioKey:  req.MinioKey,
 		Captions:  req.Captions,
+		Orientation: req.Orientation,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -114,6 +115,7 @@ func (s *ImageService) GetAllPresignedImagesByEvent(ctx context.Context, eventId
 			Url:      url,
 			Captions: item.Captions,
 			From:     item.Username,
+			Orientation: item.Orientation,
 			CreatedAt:  item.CreatedAt.String(),
 		})
 	}

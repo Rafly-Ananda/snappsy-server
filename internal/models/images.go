@@ -12,6 +12,7 @@ type Images struct {
 	Username  string             `bson:"username" json:"username"`
 	MinioKey  string             `bson:"minioKey" json:"minioKey"`
 	Captions  string             `bson:"captions" json:"captions"`
+	Orientation  string           `bson:"orientation" json:"orientation"`
 	CreatedAt time.Time          `bson:"createdAt" json:"createdAt"`
 	UpdatedAt time.Time          `bson:"updatedAt" json:"updatedAt"`
 }
