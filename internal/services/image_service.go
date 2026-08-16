@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	imgDto "github.com/rafly-ananda/snappsy-uploader-api/internal/dto/images"
@@ -107,9 +108,9 @@ func (s *ImageService) GetAllPresignedImagesByEvent(ctx context.Context, eventId
 	for _, item := range imgs {
 		url, err := s.obj.PresignGet(ctx, s.bucket, item.MinioKey, expiry)
 		if err != nil {
+			log.Printf("presign failed for key %s: %v", item.MinioKey, err)
 			continue
 		}
-
 		presignedList = append(presignedList, imgDto.GeneratePresignedUrlView{
 			Id:       item.ID.Hex(),
 			Url:      url,

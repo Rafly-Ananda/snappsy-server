@@ -16,8 +16,9 @@ type MinioAdapter struct {
 
 func NewMinio(endpoint, accessKey, secretKey, bucket string, minioExpiry time.Duration, secure bool) (*MinioAdapter, error) {
 	cl, err := minio.New(endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
-		Secure: true,
+		Creds: credentials.NewStaticV4(accessKey, secretKey, ""),
+		// Enable to true for secure connections (https)
+		Secure: false,
 	})
 
 	if err != nil {
