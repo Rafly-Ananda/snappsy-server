@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/url"
+	"strings"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -17,45 +18,36 @@ type MongoStorage struct {
 }
 
 func NewMongo(host string, username string, password string, dbName string, mongoOpts string) (*MongoStorage, error) {
-	uri := fmt.Sprintf("mongodb://%s:%s@%s/%s?%s", username, password, host, dbName, mongoOpts)
-	log.Println("using uri:" + uri)
+	uri := "mongodb://"
+	if username != "" {
+		uri += url.UserPassword(username, password).String() + "@"
+	}
+	uri += strings.TrimSuffix(host, "/") + "/" + url.PathEscape(dbName)
+	if mongoOpts != "" {
+		uri += "?" + strings.TrimPrefix(mongoOpts, "?")
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	cl, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
 	if err != nil {
-		log.Fatal("Mongo connection error:", err)
-		return nil, err
+		return nil, fmt.Errorf("connect MongoDB: %w", err)
 	}
 
-	err = cl.Ping(ctx, nil)
-	if err != nil {
-		log.Fatal("Mongo ping error:", err)
-		return nil, err
+	if err = cl.Ping(ctx, nil); err != nil {
+		_ = cl.Disconnect(context.Background())
+		return nil, fmt.Errorf("ping MongoDB: %w", err)
 	}
 
-	log.Println("Connected to MongoDB:", uri)
-
-	return &MongoStorage{
-		Client: cl,
-		Db:     cl.Database(dbName),
-	}, nil
+	log.Printf("Connected to MongoDB database=%s hosts=%s", dbName, host)
+	return &MongoStorage{Client: cl, Db: cl.Database(dbName)}, nil
 }
 
-func ensureIndexes(collection *mongo.Collection, ctx context.Context) error {
-	mod := mongo.IndexModel{
-		Keys: bson.D{
-			{Key: "eventId", Value: 1},
-			{Key: "createdAt", Value: -1},
-		},
-		Options: options.Index().SetName("eventId_createdAt_idx"),
-	}
-	_, err := collection.Indexes().CreateOne(ctx, mod)
+func (m *MongoStorage) Ping(ctx context.Context) error {
+	return m.Client.Ping(ctx, nil)
+}
 
-	if err != nil {
-		log.Printf("index creation error: %v", err)
-	}
-
-	return err
+func (m *MongoStorage) Disconnect(ctx context.Context) error {
+	return m.Client.Disconnect(ctx)
 }

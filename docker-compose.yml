@@ -8,7 +8,7 @@ services:
     container_name: goapp
     restart: unless-stopped
     depends_on:
-      minio:
+      seaweedfs:
         condition: service_healthy
       mongo:
         condition: service_healthy
@@ -17,6 +17,8 @@ services:
     environment:
       - PORT=8080
       - GIN_MODE=release
+      - MONGODB_HOST=mongo:27017
+      - SEAWEEDFS_ENDPOINT=seaweedfs:9000
     expose:
       - "8080"
     networks:
@@ -28,16 +30,38 @@ services:
       retries: 3
       start_period: 10s
 
+  boomerang-worker:
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-v1.0.0}
+        BUILD_TIME: ${BUILD_TIME}
+    container_name: boomerang-worker
+    restart: unless-stopped
+    depends_on:
+      seaweedfs:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - WORKER_MODE=all
+      - MONGODB_HOST=mongo:27017
+      - SEAWEEDFS_ENDPOINT=seaweedfs:9000
+    networks:
+      - app-network
+
   mongo:
-    image: mongo:6.0
+    image: mongo:8.0
     container_name: mongo
     restart: unless-stopped
-    ports: 
-      - "127.0.0.1:27017:27017" # enable SSH tunnel access
+    ports:
+      - "127.0.0.1:27017:27017"
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD}
-      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USERNAME:?Set MONGODB_USERNAME in .env}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD:?Set MONGODB_PASSWORD in .env}
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE:-snappsy}
     volumes:
       - mongo_data:/data/db
     networks:
@@ -49,53 +73,38 @@ services:
       retries: 3
       start_period: 40s
 
-  minio:
-    image: minio/minio:latest
-    container_name: minio
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    container_name: seaweedfs
     restart: unless-stopped
-    command: server /data --console-address ":9001"
+    command: >
+      mini -dir=/data
+      -s3.port=9000
+      -admin.port=9001
+      -admin.password=${SEAWEEDFS_ADMIN_PASSWORD:?Set SEAWEEDFS_ADMIN_PASSWORD in .env}
+      -admin.port.legacy=0
+      -s3.port.iceberg=0
+      -s3.port.lance=0
+      -webdav=false
+      -master.telemetry=false
     expose:
       - "9000"
       - "9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
-      MINIO_BROWSER_REDIRECT_URL: https://console.raflysoemantri.cloud 
-      MINIO_SERVER_URL: https://files.raflysoemantri.cloud
-      MINIO_DOMAIN: files.raflysoemantri.cloud 
+      AWS_ACCESS_KEY_ID: ${SEAWEEDFS_ACCESS_KEY:?Set SEAWEEDFS_ACCESS_KEY in .env}
+      AWS_SECRET_ACCESS_KEY: ${SEAWEEDFS_SECRET_KEY:?Set SEAWEEDFS_SECRET_KEY in .env}
+      S3_BUCKET: ${SEAWEEDFS_BUCKET:-images}
+      S3_EXTERNAL_URL: ${SEAWEEDFS_PUBLIC_URL:-}
     volumes:
-      - minio_data:/data
+      - seaweedfs_data:/data
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "curl", "-f", "http://localhost:9000/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3
-
-  minio-mc:
-    image: minio/mc:latest
-    container_name: minio-mc
-    restart: "no"  # Only runs once to create bucket
-    depends_on:
-      minio:
-        condition: service_healthy
-    env_file:
-      - .env
-    networks:
-      - app-network
-    entrypoint: >
-      /bin/sh -c "
-      echo 'Waiting for MinIO to be ready...' &&
-      until (/usr/bin/mc alias set local http://minio:9000 ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY}) do
-        echo 'MinIO not ready yet, retrying in 5s...' &&
-        sleep 5
-      done &&
-      echo 'MinIO is ready, creating bucket...' &&
-      /usr/bin/mc mb -p local/${MINIO_BUCKET} || true &&
-      echo 'Bucket created successfully!' &&
-      exit 0
-      "
+      start_period: 15s
 
   nginx:
     image: nginx:alpine
@@ -105,12 +114,23 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
       - ./certbot/www:/var/www/certbot
       - ./certbot/conf:/etc/letsencrypt
+    environment:
+      API_DOMAIN: ${API_DOMAIN:-api.localhost}
+      FILES_DOMAIN: ${FILES_DOMAIN:-files.localhost}
+      CONSOLE_DOMAIN: ${CONSOLE_DOMAIN:-console.localhost}
+    command: >
+      /bin/sh -c "sed
+      -e 's|__API_DOMAIN__|${API_DOMAIN:-api.localhost}|g'
+      -e 's|__FILES_DOMAIN__|${FILES_DOMAIN:-files.localhost}|g'
+      -e 's|__CONSOLE_DOMAIN__|${CONSOLE_DOMAIN:-console.localhost}|g'
+      /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf
+      && nginx -g 'daemon off;'"
     depends_on:
       - goapp
-      - minio
+      - seaweedfs
     networks:
       - app-network
     healthcheck:
@@ -130,7 +150,7 @@ services:
       - app-network
 
 volumes:
-  minio_data:
+  seaweedfs_data:
   mongo_data:
 
 networks:

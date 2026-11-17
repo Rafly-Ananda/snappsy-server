@@ -8,7 +8,7 @@ services:
     container_name: goapp-dev
     restart: unless-stopped
     depends_on:
-      - minio
+      - seaweedfs
       - mongo
     env_file:
       - .env
@@ -16,27 +16,55 @@ services:
       - PORT=8080
       - GIN_MODE=debug
       - ENV=development
+      - MONGODB_HOST=mongo:27017
+      - SEAWEEDFS_ENDPOINT=seaweedfs:9000
+      - SEAWEEDFS_PUBLIC_URL=http://localhost:9000
     ports:
-      - "8080:8080"  # Exposed for direct access in dev
+      - "8080:8080"
     volumes:
-      - .:/app  # Mount source code for hot reload
-      - /app/tmp  # Exclude tmp directory
+      - .:/app
+      - /app/tmp
     working_dir: /app
-    # Use air for hot reload
     command: air -c .air.toml
     networks:
       - app-network
 
+  boomerang-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        GO_VERSION: 1.24
+    container_name: boomerang-worker-dev
+    restart: unless-stopped
+    depends_on:
+      - seaweedfs
+      - mongo
+    env_file:
+      - .env
+    environment:
+      - WORKER_MODE=all
+      - MONGODB_HOST=mongo:27017
+      - SEAWEEDFS_ENDPOINT=seaweedfs:9000
+      - SEAWEEDFS_PUBLIC_URL=http://localhost:9000
+    volumes:
+      - .:/app
+      - /app/tmp
+    working_dir: /app
+    command: go run ./cmd/server
+    networks:
+      - app-network
+
   mongo:
-    image: mongo:6.0
+    image: mongo:8.0
     container_name: mongo-dev
     restart: unless-stopped
     ports:
-      - "27017:27017"  # Exposed for MongoDB Compass, Studio 3T, etc.
+      - "27017:27017"
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD}
-      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USERNAME:?Set MONGODB_USERNAME in .env}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD:?Set MONGODB_PASSWORD in .env}
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE:-snappsy}
     volumes:
       - mongo_data_dev:/data/db
     networks:
@@ -47,10 +75,10 @@ services:
     container_name: mongo-express
     restart: unless-stopped
     ports:
-      - "8081:8081"  # Web UI for MongoDB
+      - "8081:8081"
     environment:
-      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGODB_USERNAME}
-      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGODB_PASSWORD}
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGODB_USERNAME:?Set MONGODB_USERNAME in .env}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGODB_PASSWORD:?Set MONGODB_PASSWORD in .env}
       ME_CONFIG_MONGODB_URL: mongodb://${MONGODB_USERNAME}:${MONGODB_PASSWORD}@mongo:27017/
       ME_CONFIG_BASICAUTH_USERNAME: admin
       ME_CONFIG_BASICAUTH_PASSWORD: admin
@@ -59,53 +87,39 @@ services:
     networks:
       - app-network
 
-  minio:
-    image: minio/minio:latest
-    container_name: minio-dev
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    container_name: seaweedfs-dev
     restart: unless-stopped
-    command: server /data --console-address ":9001"
+    command: >
+      mini -dir=/data
+      -s3.port=9000
+      -admin.port=9001
+      -admin.password=${SEAWEEDFS_ADMIN_PASSWORD:-snappsy-dev-admin}
+      -admin.port.legacy=0
+      -s3.port.iceberg=0
+      -s3.port.lance=0
+      -webdav=false
+      -master.telemetry=false
     ports:
-      - "9000:9000"  # S3 API - exposed for testing
-      - "9001:9001"  # Web console - exposed for management
+      - "9000:9000"
+      - "9001:9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+      AWS_ACCESS_KEY_ID: ${SEAWEEDFS_ACCESS_KEY:-snappsy-access-key}
+      AWS_SECRET_ACCESS_KEY: ${SEAWEEDFS_SECRET_KEY:-snappsy-secret-key}
+      S3_BUCKET: ${SEAWEEDFS_BUCKET:-images}
+      S3_EXTERNAL_URL: http://localhost:9000
     volumes:
-      - minio_data_dev:/data
+      - seaweedfs_data_dev:/data
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "curl", "-f", "http://localhost:9000/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 15s
 
-  minio-mc:
-    image: minio/mc:latest
-    container_name: minio-mc-dev
-    restart: "no"
-    depends_on:
-      minio:
-        condition: service_healthy
-    env_file:
-      - .env
-    networks:
-      - app-network
-    entrypoint: >
-      /bin/sh -c "
-      echo 'Waiting for MinIO to be ready...' &&
-      until (/usr/bin/mc alias set local http://minio:9000 ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY}) do
-        echo 'MinIO not ready yet, retrying in 5s...' &&
-        sleep 5
-      done &&
-      echo 'MinIO is ready, creating bucket...' &&
-      /usr/bin/mc mb -p local/${MINIO_BUCKET} || true &&
-      /usr/bin/mc anonymous set public local/${MINIO_BUCKET} || true &&
-      echo 'Bucket created and set to public!' &&
-      exit 0
-      "
-
-  # Optional: Redis for caching/sessions in development
   redis:
     image: redis:7-alpine
     container_name: redis-dev
@@ -118,19 +132,18 @@ services:
       - app-network
     command: redis-server --appendonly yes
 
-  # Optional: Mailhog for email testing
   mailhog:
     image: mailhog/mailhog:latest
     container_name: mailhog
     restart: unless-stopped
     ports:
-      - "1025:1025"  # SMTP server
-      - "8025:8025"  # Web UI
+      - "1025:1025"
+      - "8025:8025"
     networks:
       - app-network
 
 volumes:
-  minio_data_dev:
+  seaweedfs_data_dev:
     driver: local
   mongo_data_dev:
     driver: local

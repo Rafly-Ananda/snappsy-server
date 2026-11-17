@@ -3,12 +3,12 @@ FROM golang:1.24-bookworm
 # Install air for hot reload (use compatible version for Go 1.24)
 RUN go install github.com/air-verse/air@v1.52.3
 
-# Install useful dev tools
-RUN go install github.com/go-delve/delve/cmd/dlv@latest && \
-    go install golang.org/x/tools/gopls@latest
+# Install useful dev tools pinned for Go 1.24.
+RUN go install github.com/go-delve/delve/cmd/dlv@v1.24.1 && \
+    go install golang.org/x/tools/gopls@v0.18.1
 
 # Install curl for healthchecks
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y curl ffmpeg fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

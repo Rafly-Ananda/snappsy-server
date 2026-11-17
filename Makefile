@@ -1,13 +1,20 @@
-.PHONY: help dev dev-build dev-down dev-logs dev-restart prod prod-build prod-down prod-logs test clean
+AIR ?= ./bin/air
+ADMIN_USERNAME ?= snappsy-admin
+ADMIN_PASSWORD ?= snappsy-dev-password
+
+.PHONY: help dev dev-local dev-full dev-build deps dev-stop dev-down dev-logs dev-restart prod prod-build prod-down prod-logs test clean
 
 # Default target
 help:
 	@echo "Available commands:"
-	@echo "  make dev          - Start development environment"
-	@echo "  make dev-build    - Rebuild and start development environment"
+	@echo "  make dev          - Start MongoDB/SeaweedFS and run API with Air hot reload"
+	@echo "  make dev-local    - Alias for make dev"
+	@echo "  make dev-full     - Run the whole development stack in Docker"
+	@echo "  make deps         - Start MongoDB, SeaweedFS and boomerang worker"
+	@echo "  make dev-build    - Rebuild and start full Docker development stack"
 	@echo "  make dev-down     - Stop development environment"
 	@echo "  make dev-logs     - View development logs"
-	@echo "  make dev-restart  - Restart development services"
+	@echo "  make dev-restart  - Restart Dockerized goapp (only for make dev-full)"
 	@echo "  make prod         - Start production environment"
 	@echo "  make prod-build   - Rebuild and start production environment"
 	@echo "  make prod-down    - Stop production environment"
@@ -16,37 +23,70 @@ help:
 	@echo "  make clean        - Clean up volumes and images"
 
 # Development commands
-dev:
-	@echo "Starting development environment..."
-	cp .env.example .env
-	docker compose -f docker compose.dev.yml up -d
+dev: deps dev-stop
+	MONGODB_HOST=localhost:27017 SEAWEEDFS_ENDPOINT=localhost:9000 SEAWEEDFS_PUBLIC_URL=http://localhost:9000 ADMIN_USERNAME=$(ADMIN_USERNAME) ADMIN_PASSWORD=$(ADMIN_PASSWORD) $(AIR) -c .air.toml
+
+dev-local: dev
+
+deps:
+	@echo "Starting development dependencies..."
+	docker compose -f docker-compose.dev.yml up -d mongo seaweedfs
+	docker compose -f docker-compose.dev.yml up -d --force-recreate boomerang-worker
 	@echo ""
-	@echo "✓ Development environment started!"
+	@echo "✓ Dependencies started"
+	@echo "  - MongoDB:       localhost:27017"
+	@echo "  - SeaweedFS S3:  localhost:9000"
+	@echo "  - SeaweedFS Admin: http://localhost:9001"
+	@echo "  - Boomerang worker: Docker (ffmpeg)"
 	@echo ""
-	@echo "Services available at:"
+	@echo "API will run on: http://localhost:8080"
+
+dev-stop:
+	@echo "Stopping previous local Air server..."
+	@pkill -f "$(AIR) -c .air.toml" 2>/dev/null || true
+	@pkill -f "tmp/main" 2>/dev/null || true
+	@pid=$$(lsof -ti tcp:8080); \
+	if [ -n "$$pid" ]; then \
+		echo "Stopping process on port 8080: $$pid"; \
+		kill $$pid 2>/dev/null || true; \
+		sleep 1; \
+		pid=$$(lsof -ti tcp:8080); \
+		if [ -n "$$pid" ]; then kill -9 $$pid 2>/dev/null || true; fi; \
+		sleep 1; \
+	fi; \
+	pid=$$(lsof -ti tcp:8080); \
+	if [ -n "$$pid" ]; then \
+		echo "Port 8080 is still in use by: $$pid"; \
+		exit 1; \
+	fi
+
+dev-full:
+	@echo "Starting full Docker development environment..."
+	docker compose -f docker-compose.dev.yml up -d
+	@echo ""
+	@echo "✓ Full development environment started"
 	@echo "  - API:          http://localhost:8080"
-	@echo "  - MinIO Console: http://localhost:9001 (minioadmin/minioadmin)"
-	@echo "  - Mongo Express: http://localhost:8081 (admin/admin)"
+	@echo "  - SeaweedFS Admin: http://localhost:9001"
+	@echo "  - Mongo Express: http://localhost:8081"
 	@echo "  - Mailhog UI:    http://localhost:8025"
-	@echo "  - Redis:         localhost:6379"
+	@echo "  - Redis:         localhost:6378"
 	@echo ""
 	@echo "View logs: make dev-logs"
 
 dev-build:
-	@echo "Rebuilding development environment..."
-	cp .env.example .env
-	docker compose -f docker compose.dev.yml up -d --build
+	@echo "Rebuilding full Docker development environment..."
+	docker compose -f docker-compose.dev.yml up -d --build
 
 dev-down:
 	@echo "Stopping development environment..."
-	docker compose -f docker compose.dev.yml down
+	docker compose -f docker-compose.dev.yml down
 
 dev-logs:
-	docker compose -f docker compose.dev.yml logs -f
+	docker compose -f docker-compose.dev.yml logs -f
 
 dev-restart:
-	@echo "Restarting development services..."
-	docker compose -f docker compose.dev.yml restart goapp
+	@echo "Restarting Dockerized goapp..."
+	docker compose -f docker-compose.dev.yml restart goapp
 
 # Production commands
 prod:
@@ -92,7 +132,7 @@ test-coverage:
 
 # Database commands
 db-shell:
-	docker compose -f docker compose.dev.yml exec mongo mongosh -u admin -p devpassword123
+	docker compose -f docker-compose.dev.yml exec mongo mongosh -u admin -p devpassword123
 
 db-backup:
 	@echo "Creating database backup..."
@@ -102,7 +142,7 @@ db-backup:
 # Cleanup
 clean:
 	@echo "Cleaning up..."
-	docker compose -f docker compose.dev.yml down -v
+	docker compose -f docker-compose.dev.yml down -v
 	docker compose down -v
 	docker system prune -f
 	@echo "✓ Cleanup complete!"
@@ -112,7 +152,7 @@ clean-all:
 	@read -p "Are you sure? [y/N] " -n 1 -r; \
 	echo; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-		docker compose -f docker compose.dev.yml down -v --remove-orphans; \
+		docker compose -f docker-compose.dev.yml down -v --remove-orphans; \
 		docker compose down -v --remove-orphans; \
 		docker system prune -a -f --volumes; \
 		echo "✓ All cleaned up!"; \
@@ -121,11 +161,12 @@ clean-all:
 # Installation
 install-air:
 	@echo "Installing Air for hot reload..."
-	go install github.com/air-verse/air@latest
+	mkdir -p bin
+	GOBIN=$$(pwd)/bin go install github.com/air-verse/air@v1.52.3
 
 install-tools:
 	@echo "Installing development tools..."
-	go install github.com/air-verse/air@latest
-	go install github.com/go-delve/delve/cmd/dlv@latest
-	go install golang.org/x/tools/gopls@latest
+	GOBIN=$$(pwd)/bin go install github.com/air-verse/air@v1.52.3
+	go install github.com/go-delve/delve/cmd/dlv@v1.24.1
+	go install golang.org/x/tools/gopls@v0.18.1
 	@echo "✓ Tools installed!"

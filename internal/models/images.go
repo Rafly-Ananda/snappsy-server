@@ -1,18 +1,4 @@
 package models
 
-import (
-	"time"
-
-	"go.mongodb.org/mongo-driver/bson/primitive"
-)
-
-type Images struct {
-	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
-	EventId   string             `bson:"eventId" json:"sessionId"`
-	Username  string             `bson:"username" json:"username"`
-	MinioKey  string             `bson:"minioKey" json:"minioKey"`
-	Captions  string             `bson:"captions" json:"captions"`
-	Orientation string			 `bson:"orientation" json:"orientation"`
-	CreatedAt time.Time          `bson:"createdAt" json:"createdAt"`
-	UpdatedAt time.Time          `bson:"updatedAt" json:"updatedAt"`
-}
+// MediaItem now lives in media_item.go. This file intentionally remains empty
+// so old imports keep working during the Phase 1 migration.

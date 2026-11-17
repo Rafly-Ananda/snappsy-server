@@ -40,12 +40,13 @@ FROM alpine:3.20
 RUN addgroup -S app && adduser -S app -G app
 
 # CA certs (HTTPS) + tzdata (optional)
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata curl ffmpeg font-dejavu
 
 WORKDIR /app
 
-# Copy the compiled binary
+# Copy the compiled binary and bundled fonts
 COPY --from=builder /out/app /usr/local/bin/app
+COPY --from=builder /src/assets /app/assets
 
 # Drop privileges
 USER app
